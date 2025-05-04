@@ -1,0 +1,1716 @@
+-- Advanced Roblox Admin Script (ARA) - Version 1.0
+-- Created by: AI Admin Developer
+-- Do not modify or redistribute without permission
+
+-- Check if we're in a supported exploit environment
+if not is_sirhurt_closure and not protect_gui and not syn then
+    error("ARA: Unsupported exploit environment. Please use KRNL, Synapse X, or similar.")
+end
+
+-- Services
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local CoreGui = game:GetService("CoreGui")
+local GuiService = game:GetService("GuiService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local SoundService = game:GetService("SoundService")
+
+-- Variables
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local ARA = {}
+ARA.Commands = {}
+ARA.Settings = {
+    Prefix = "!",
+    ThemeColor = Color3.fromRGB(45, 45, 45),
+    AccentColor = Color3.fromRGB(255, 84, 84),
+    TextColor = Color3.fromRGB(255, 255, 255),
+    SaveVersion = "ARA_1.0",
+    SavedCommands = {},
+    Enabled = true,
+    AntiCrash = true,
+    DetectionBypass = true,
+    AutoUpdate = true,
+    GameSupport = true
+}
+ARA.GUI = {}
+ARA.Version = "1.0.0"
+ARA.SavedData = {}
+ARA.BannedPlayers = {}
+ARA.JailedPlayers = {}
+ARA.ActiveTrolls = {}
+ARA.EnvironmentBackup = {}
+
+-- Wait for character
+repeat wait() until LocalPlayer.Character
+
+-- Anti-Crash Protection
+if ARA.Settings.AntiCrash then
+    local old
+    old = hookmetamethod(game, "__index", function(t, k)
+        if not ARA.Settings.Enabled then return old(t, k) end
+        if getrawmetatable(t) and getrawmetatable(t).ClassName == "RemoteEvent" and k == "FireServer" then
+            return function(self, ...)
+                if checkcaller() then return self.old(self, ...) end
+                return old(self, ...)
+            end
+        end
+        return old(t, k)
+    end)
+end
+
+-- Detection Bypass
+if ARA.Settings.DetectionBypass then
+    for i, v in pairs(debug.getregistry()) do
+        if type(v) == "function" and islclosure(v) then
+            local upvalues = {}
+            for n = 1, 255 do
+                local name, value = debug.getupvalue(v, n)
+                if not name then break end
+                upvalues[name] = value
+            end
+            if upvalues["ban"] or upvalues["kick"] or upvalues["warn"] then
+                debug.setupvalue(v, 1, function() return end)
+            end
+        end
+    end
+end
+
+-- Sound effects
+ARA.Sounds = {
+    Open = "rbxassetid://1134651715",
+    Command = "rbxassetid://1134651715",
+    Error = "rbxassetid://1134651715"
+}
+
+-- GUI Creation
+function ARA:CreateGUI()
+    -- Main Frame
+    local MainFrame = Instance.new("ScreenGui")
+    MainFrame.Name = "ARA_Admin"
+    MainFrame.ResetOnSpawn = false
+    MainFrame.Parent = CoreGui
+    
+    -- Right Panel
+    local RightPanel = Instance.new("Frame")
+    RightPanel.Name = "RightPanel"
+    RightPanel.Size = UDim2.new(0, 400, 0, 500)
+    RightPanel.Position = UDim2.new(1, -20, 0.5, -250)
+    RightPanel.AnchorPoint = Vector2.new(1, 0.5)
+    RightPanel.BackgroundColor3 = ARA.Settings.ThemeColor
+    RightPanel.BorderSizePixel = 0
+    RightPanel.Parent = MainFrame
+    
+    -- Right Panel Corner
+    local RightCorner = Instance.new("UICorner")
+    RightCorner.CornerRadius = UDim.new(0, 8)
+    RightCorner.Parent = RightPanel
+    
+    -- Right Panel Stroke
+    local RightStroke = Instance.new("UIStroke")
+    RightStroke.Thickness = 2
+    RightStroke.Color = ARA.Settings.AccentColor
+    RightStroke.Parent = RightPanel
+    
+    -- Right Panel Title
+    local Title = Instance.new("TextLabel")
+    Title.Name = "Title"
+    Title.Size = UDim2.new(1, 0, 0, 40)
+    Title.Position = UDim2.new(0, 0, 0, 0)
+    Title.BackgroundTransparency = 1
+    Title.Text = "ARA Admin v" .. ARA.Version
+    Title.TextColor3 = ARA.Settings.TextColor
+    Title.TextSize = 20
+    Title.Font = Enum.Font.GothamBold
+    Title.Parent = RightPanel
+    
+    -- Command List
+    local CommandList = Instance.new("ScrollingFrame")
+    CommandList.Name = "CommandList"
+    CommandList.Size = UDim2.new(1, 0, 1, -90)
+    CommandList.Position = UDim2.new(0, 0, 0, 50)
+    CommandList.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    CommandList.BorderSizePixel = 0
+    CommandList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    CommandList.ScrollBarThickness = 6
+    CommandList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    CommandList.VerticalScrollBarInset = Enum.ScrollBarInset.None
+    CommandList.Parent = RightPanel
+    
+    -- Command List Layout
+    local CommandLayout = Instance.new("UIListLayout")
+    CommandLayout.Padding = UDim.new(0, 5)
+    CommandLayout.Parent = CommandList
+    
+    -- Command List Padding
+    local CommandPadding = Instance.new("UIPadding")
+    CommandPadding.PaddingLeft = UDim.new(0, 10)
+    CommandPadding.PaddingRight = UDim.new(0, 10)
+    CommandPadding.PaddingTop = UDim.new(0, 10)
+    CommandPadding.PaddingBottom = UDim.new(0, 10)
+    CommandPadding.Parent = CommandList
+    
+    -- Command Search
+    local SearchBox = Instance.new("TextBox")
+    SearchBox.Name = "SearchBox"
+    SearchBox.Size = UDim2.new(1, -20, 0, 30)
+    SearchBox.Position = UDim2.new(0, 10, 0, 5)
+    SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    SearchBox.BorderSizePixel = 0
+    SearchBox.TextColor3 = ARA.Settings.TextColor
+    SearchBox.PlaceholderText = "Search commands..."
+    SearchBox.ClearTextOnFocus = false
+    SearchBox.Text = ""
+    SearchBox.Font = Enum.Font.Gotham
+    SearchBox.TextSize = 14
+    SearchBox.Parent = RightPanel
+    
+    -- Search Box Corner
+    local SearchCorner = Instance.new("UICorner")
+    SearchCorner.CornerRadius = UDim.new(0, 4)
+    SearchCorner.Parent = SearchBox
+    
+    -- Left Panel
+    local LeftPanel = Instance.new("Frame")
+    LeftPanel.Name = "LeftPanel"
+    LeftPanel.Size = UDim2.new(0, 300, 0, 400)
+    LeftPanel.Position = UDim2.new(0, 20, 0.5, -200)
+    LeftPanel.BackgroundColor3 = ARA.Settings.ThemeColor
+    LeftPanel.BorderSizePixel = 0
+    LeftPanel.Parent = MainFrame
+    
+    -- Left Panel Corner
+    local LeftCorner = Instance.new("UICorner")
+    LeftCorner.CornerRadius = UDim.new(0, 8)
+    LeftCorner.Parent = LeftPanel
+    
+    -- Left Panel Stroke
+    local LeftStroke = Instance.new("UIStroke")
+    LeftStroke.Thickness = 2
+    LeftStroke.Color = ARA.Settings.AccentColor
+    LeftStroke.Parent = LeftPanel
+    
+    -- Left Panel Title
+    local LeftTitle = Instance.new("TextLabel")
+    LeftTitle.Name = "LeftTitle"
+    LeftTitle.Size = UDim2.new(1, 0, 0, 40)
+    LeftTitle.Position = UDim2.new(0, 0, 0, 0)
+    LeftTitle.BackgroundTransparency = 1
+    LeftTitle.Text = "Command Console"
+    LeftTitle.TextColor3 = ARA.Settings.TextColor
+    LeftTitle.TextSize = 20
+    LeftTitle.Font = Enum.Font.GothamBold
+    LeftTitle.Parent = LeftPanel
+    
+    -- Command Input
+    local CommandInput = Instance.new("TextBox")
+    CommandInput.Name = "CommandInput"
+    CommandInput.Size = UDim2.new(1, -20, 0, 30)
+    CommandInput.Position = UDim2.new(0, 10, 0, 400 - 60)
+    CommandInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    CommandInput.BorderSizePixel = 0
+    CommandInput.TextColor3 = ARA.Settings.TextColor
+    CommandInput.PlaceholderText = ARA.Settings.Prefix .. "command [args]"
+    CommandInput.ClearTextOnFocus = false
+    CommandInput.Text = ""
+    CommandInput.Font = Enum.Font.Gotham
+    CommandInput.TextSize = 14
+    CommandInput.Parent = LeftPanel
+    
+    -- Command Input Corner
+    local InputCorner = Instance.new("UICorner")
+    InputCorner.CornerRadius = UDim.new(0, 4)
+    InputCorner.Parent = CommandInput
+    
+    -- Command History
+    local CommandHistory = Instance.new("ScrollingFrame")
+    CommandHistory.Name = "CommandHistory"
+    CommandHistory.Size = UDim2.new(1, -20, 1, -90)
+    CommandHistory.Position = UDim2.new(0, 10, 0, 45)
+    CommandHistory.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    CommandHistory.BorderSizePixel = 0
+    CommandHistory.CanvasSize = UDim2.new(0, 0, 0, 0)
+    CommandHistory.ScrollBarThickness = 6
+    CommandHistory.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    CommandHistory.VerticalScrollBarInset = Enum.ScrollBarInset.None
+    CommandHistory.Parent = LeftPanel
+    
+    -- Command History Layout
+    local HistoryLayout = Instance.new("UIListLayout")
+    HistoryLayout.Padding = UDim.new(0, 5)
+    HistoryLayout.Parent = CommandHistory
+    
+    -- Command History Padding
+    local HistoryPadding = Instance.new("UIPadding")
+    HistoryPadding.PaddingLeft = UDim.new(0, 10)
+    HistoryPadding.PaddingRight = UDim.new(0, 10)
+    HistoryPadding.PaddingTop = UDim.new(0, 10)
+    HistoryPadding.PaddingBottom = UDim.new(0, 10)
+    HistoryPadding.Parent = CommandHistory
+    
+    -- Status Bar
+    local StatusBar = Instance.new("TextLabel")
+    StatusBar.Name = "StatusBar"
+    StatusBar.Size = UDim2.new(1, 0, 0, 20)
+    StatusBar.Position = UDim2.new(0, 0, 1, -20)
+    StatusBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    StatusBar.BorderSizePixel = 0
+    StatusBar.Text = "Ready | " .. game.PlaceId
+    StatusBar.TextColor3 = Color3.fromRGB(200, 200, 200)
+    StatusBar.TextSize = 12
+    StatusBar.Font = Enum.Font.Gotham
+    StatusBar.Parent = RightPanel
+    
+    -- Drag Functionality
+    local function MakeDraggable(gui)
+        local dragging
+        local dragInput
+        local dragStart
+        local startPos
+        
+        local function update(input)
+            local delta = input.Position - dragStart
+            gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+        
+        gui.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = gui.Position
+                
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                    end
+                end)
+            end
+        end)
+        
+        gui.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                dragInput = input
+            end
+        end)
+        
+        UserInputService.InputChanged:Connect(function(input)
+            if input == dragInput and dragging then
+                update(input)
+            end
+        end)
+    end
+    
+    MakeDraggable(RightPanel)
+    MakeDraggable(LeftPanel)
+    
+    -- Store GUI elements
+    ARA.GUI.MainFrame = MainFrame
+    ARA.GUI.RightPanel = RightPanel
+    ARA.GUI.LeftPanel = LeftPanel
+    ARA.GUI.CommandList = CommandList
+    ARA.GUI.SearchBox = SearchBox
+    ARA.GUI.CommandInput = CommandInput
+    ARA.GUI.CommandHistory = CommandHistory
+    ARA.GUI.StatusBar = StatusBar
+    
+    -- UI Animations
+    ARA.Animations = {}
+    
+    function ARA.Animations.ShowCommand(cmdFrame)
+        local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(cmdFrame, tweenInfo, {BackgroundTransparency = 0})
+        tween:Play()
+        
+        local sound = Instance.new("Sound")
+        sound.SoundId = ARA.Sounds.Command
+        sound.Volume = 0.3
+        sound.Parent = workspace
+        sound:Play()
+        wait(0.1)
+        sound:Destroy()
+    end
+    
+    function ARA.Animations.ShowError(cmdFrame)
+        local originalColor = cmdFrame.BackgroundColor3
+        cmdFrame.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+        wait(0.1)
+        cmdFrame.BackgroundColor3 = originalColor
+    end
+    
+    function ARA.Animations.ShowSuccess(cmdFrame)
+        local originalColor = cmdFrame.BackgroundColor3
+        cmdFrame.BackgroundColor3 = ARA.Settings.AccentColor
+        wait(0.1)
+        cmdFrame.BackgroundColor3 = originalColor
+    end
+    
+    function ARA.Animations.ShowGUI()
+        local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        local rightTween = TweenService:Create(RightPanel, tweenInfo, {Position = UDim2.new(1, -20, 0.5, -250)})
+        local leftTween = TweenService:Create(LeftPanel, tweenInfo, {Position = UDim2.new(0, 20, 0.5, -200)})
+        rightTween:Play()
+        leftTween:Play()
+        
+        local sound = Instance.new("Sound")
+        sound.SoundId = ARA.Sounds.Open
+        sound.Volume = 0.5
+        sound.Parent = workspace
+        sound:Play()
+        wait(0.5)
+        sound:Destroy()
+    end
+    
+    function ARA.Animations.HideGUI()
+        local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        local rightTween = TweenService:Create(RightPanel, tweenInfo, {Position = UDim2.new(1, 400, 0.5, -250)})
+        local leftTween = TweenService:Create(LeftPanel, tweenInfo, {Position = UDim2.new(0, -320, 0.5, -200)})
+        rightTween:Play()
+        leftTween:Play()
+    end
+    
+    -- Show GUI
+    ARA.Animations.ShowGUI()
+    
+    -- Command History Management
+    ARA.CommandHistory = {}
+    ARA.HistoryIndex = 0
+    
+    function ARA:AddToHistory(command)
+        table.insert(ARA.CommandHistory, command)
+        ARA.HistoryIndex = #ARA.CommandHistory
+        
+        local historyEntry = Instance.new("TextLabel")
+        historyEntry.Name = "HistoryEntry"
+        historyEntry.Size = UDim2.new(1, 0, 0, 20)
+        historyEntry.BackgroundTransparency = 1
+        historyEntry.Text = ARA.Settings.Prefix .. command
+        historyEntry.TextColor3 = ARA.Settings.TextColor
+        historyEntry.TextSize = 14
+        historyEntry.Font = Enum.Font.Gotham
+        historyEntry.TextXAlignment = Enum.TextXAlignment.Left
+        historyEntry.Parent = ARA.GUI.CommandHistory
+        
+        ARA.Animations.ShowCommand(historyEntry)
+    end
+    
+    -- Command UI Management
+    function ARA:UpdateCommandList(searchTerm)
+        -- Clear existing commands
+        for _, child in ipairs(ARA.GUI.CommandList:GetChildren()) do
+            if child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+        
+        -- Add filtered commands
+        for name, cmd in pairs(ARA.Commands) do
+            if not searchTerm or string.find(string.lower(name), string.lower(searchTerm)) or 
+               (cmd.Description and string.find(string.lower(cmd.Description), string.lower(searchTerm))) then
+                
+                local cmdButton = Instance.new("TextButton")
+                cmdButton.Name = name
+                cmdButton.Size = UDim2.new(1, 0, 0, 30)
+                cmdButton.BackgroundTransparency = 1
+                cmdButton.TextColor3 = ARA.Settings.AccentColor
+                cmdButton.Text = name
+                cmdButton.Font = Enum.Font.GothamBold
+                cmdButton.TextSize = 16
+                cmdButton.TextXAlignment = Enum.TextXAlignment.Left
+                cmdButton.Parent = ARA.GUI.CommandList
+                
+                local cmdDesc = Instance.new("TextLabel")
+                cmdDesc.Name = "Description"
+                cmdDesc.Size = UDim2.new(1, 0, 0, 15)
+                cmdDesc.Position = UDim2.new(0, 0, 0, 30)
+                cmdDesc.BackgroundTransparency = 1
+                cmdDesc.TextColor3 = Color3.fromRGB(200, 200, 200)
+                cmdDesc.Text = cmd.Description or "No description available"
+                cmdDesc.Font = Enum.Font.Gotham
+                cmdDesc.TextSize = 12
+                cmdDesc.TextXAlignment = Enum.TextXAlignment.Left
+                cmdDesc.Parent = cmdButton
+                
+                cmdButton.MouseEnter:Connect(function()
+                    cmdButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    cmdDesc.TextColor3 = Color3.fromRGB(255, 255, 255)
+                end)
+                
+                cmdButton.MouseLeave:Connect(function()
+                    cmdButton.TextColor3 = ARA.Settings.AccentColor
+                    cmdDesc.TextColor3 = Color3.fromRGB(200, 200, 200)
+                end)
+                
+                cmdButton.MouseButton1Click:Connect(function()
+                    ARA.GUI.CommandInput.Text = ARA.Settings.Prefix .. name
+                    ARA.GUI.CommandInput:CaptureFocus()
+                end)
+            end
+        end
+    end
+    
+    -- Command Search
+    ARA.GUI.SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        ARA:UpdateCommandList(ARA.GUI.SearchBox.Text)
+    end)
+    
+    -- Command Input Handling
+    ARA.GUI.CommandInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            local text = ARA.GUI.CommandInput.Text
+            if text:sub(1, #ARA.Settings.Prefix) == ARA.Settings.Prefix then
+                local args = {}
+                for word in string.gmatch(text, "[^%s]+") do
+                    table.insert(args, word)
+                end
+                
+                if #args > 0 then
+                    local command = args[1]:sub(#ARA.Settings.Prefix + 1)
+                    table.remove(args, 1)
+                    
+                    ARA:ExecuteCommand(command, args)
+                    ARA:AddToHistory(text)
+                end
+            end
+            
+            ARA.GUI.CommandInput.Text = ""
+        end
+    end)
+    
+    -- Keyboard Navigation
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if input.KeyCode == Enum.KeyCode.F then
+            if ARA.GUI.MainFrame.Enabled then
+                ARA.Animations.HideGUI()
+                wait(0.3)
+                ARA.GUI.MainFrame.Enabled = false
+            else
+                ARA.GUI.MainFrame.Enabled = true
+                ARA.Animations.ShowGUI()
+            end
+        end
+        
+        if input.KeyCode == Enum.KeyCode.Up then
+            if ARA.HistoryIndex > 0 then
+                ARA.HistoryIndex = ARA.HistoryIndex - 1
+                ARA.GUI.CommandInput.Text = ARA.CommandHistory[ARA.HistoryIndex + 1]
+                ARA.GUI.CommandInput:CaptureFocus()
+                ARA.GUI.CommandInput.SelectionStart = #ARA.GUI.CommandInput.Text
+                ARA.GUI.CommandInput.SelectionEnd = #ARA.GUI.CommandInput.Text
+            end
+        elseif input.KeyCode == Enum.KeyCode.Down then
+            if ARA.HistoryIndex < #ARA.CommandHistory then
+                ARA.HistoryIndex = ARA.HistoryIndex + 1
+                if ARA.HistoryIndex <= #ARA.CommandHistory then
+                    ARA.GUI.CommandInput.Text = ARA.CommandHistory[ARA.HistoryIndex]
+                    ARA.GUI.CommandInput:CaptureFocus()
+                    ARA.GUI.CommandInput.SelectionStart = #ARA.GUI.CommandInput.Text
+                    ARA.GUI.CommandInput.SelectionEnd = #ARA.GUI.CommandInput.Text
+                else
+                    ARA.GUI.CommandInput.Text = ""
+                end
+            end
+        end
+    end)
+    
+    -- Initialize command list
+    ARA:UpdateCommandList()
+end
+
+-- Command Execution
+function ARA:ExecuteCommand(command, args)
+    local cmd = ARA.Commands[string.lower(command)]
+    if cmd then
+        if not cmd.AdminOnly or ARA:CheckAdminPermissions() then
+            local success, err = pcall(function()
+                cmd.Function(args)
+            end)
+            
+            if not success then
+                ARA:ShowNotification("Command Error", "Error executing " .. command .. ": " .. err, 5)
+                ARA.Animations.ShowError(ARA.GUI.CommandHistory:GetChildren()[#ARA.GUI.CommandHistory])
+            else
+                ARA.Animations.ShowSuccess(ARA.GUI.CommandHistory:GetChildren()[#ARA.GUI.CommandHistory])
+            end
+        else
+            ARA:ShowNotification("Permission Denied", "You don't have permission to execute " .. command, 5)
+            ARA.Animations.ShowError(ARA.GUI.CommandHistory:GetChildren()[#ARA.GUI.CommandHistory])
+        end
+    else
+        ARA:ShowNotification("Unknown Command", "Command " .. command .. " not found", 5)
+        ARA.Animations.ShowError(ARA.GUI.CommandHistory:GetChildren()[#ARA.GUI.CommandHistory])
+    end
+end
+
+-- Command Registration
+function ARA:RegisterCommand(name, description, adminOnly, functionHandler)
+    ARA.Commands[string.lower(name)] = {
+        Name = name,
+        Description = description,
+        AdminOnly = adminOnly,
+        Function = functionHandler
+    }
+end
+
+-- Notification System
+function ARA:ShowNotification(title, message, duration)
+    local notification = Instance.new("TextLabel")
+    notification.Name = "Notification"
+    notification.Size = UDim2.new(0, 300, 0, 80)
+    notification.Position = UDim2.new(1, -320, 0, -100)
+    notification.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    notification.BorderSizePixel = 0
+    notification.Text = ""
+    notification.Parent = ARA.GUI.MainFrame
+    
+    local titleText = Instance.new("TextLabel")
+    titleText.Name = "Title"
+    titleText.Size = UDim2.new(1, 0, 0, 25)
+    titleText.Position = UDim2.new(0, 0, 0, 0)
+    titleText.BackgroundTransparency = 1
+    titleText.Text = title
+    titleText.TextColor3 = ARA.Settings.AccentColor
+    titleText.TextSize = 18
+    titleText.Font = Enum.Font.GothamBold
+    titleText.TextXAlignment = Enum.TextXAlignment.Left
+    titleText.Parent = notification
+    
+    local messageText = Instance.new("TextLabel")
+    messageText.Name = "Message"
+    messageText.Size = UDim2.new(1, 0, 0, 40)
+    messageText.Position = UDim2.new(0, 0, 0, 25)
+    messageText.BackgroundTransparency = 1
+    messageText.Text = message
+    messageText.TextColor3 = ARA.Settings.TextColor
+    messageText.TextSize = 14
+    messageText.Font = Enum.Font.Gotham
+    messageText.TextXAlignment = Enum.TextXAlignment.Left
+    messageText.TextWrapped = true
+    messageText.Parent = notification
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = notification
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1
+    stroke.Color = ARA.Settings.AccentColor
+    stroke.Parent = notification
+    
+    -- Animate in
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(notification, tweenInfo, {Position = UDim2.new(1, -320, 0, 20)})
+    tween:Play()
+    
+    -- Animate out after duration
+    spawn(function()
+        wait(duration)
+        local tweenOut = TweenService:Create(notification, tweenInfo, {Position = UDim2.new(1, -320, 0, -100)})
+        tweenOut.Completed:Connect(function()
+            notification:Destroy()
+        end)
+        tweenOut:Play()
+    end)
+end
+
+-- Utility Functions
+function ARA:CheckAdminPermissions()
+    -- Implement admin permission check logic here
+    return true -- Temporary
+end
+
+function ARA:GetPlayer(args, index)
+    local name = args[index or 1]
+    if name == "me" then
+        return LocalPlayer
+    elseif name == "all" then
+        return Players:GetPlayers()
+    elseif name == "others" then
+        local others = {}
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                table.insert(others, player)
+            end
+        end
+        return others
+    else
+        for _, player in pairs(Players:GetPlayers()) do
+            if string.sub(string.lower(player.Name), 1, #name) == string.lower(name) then
+                return player
+            end
+        end
+    end
+    return nil
+end
+
+function ARA:CreatePart(parent, size, position, color)
+    local part = Instance.new("Part")
+    part.Size = size
+    part.Position = position
+    part.Anchored = true
+    part.CanCollide = false
+    part.BrickColor = BrickColor.new(color)
+    part.Material = Enum.Material.SmoothPlastic
+    part.Parent = parent
+    return part
+end
+
+function ARA:CreateTool(name, description, handler)
+    local tool = Instance.new("Tool")
+    tool.Name = name
+    tool.ToolTip = description
+    
+    local handle = Instance.new("Part")
+    handle.Name = "Handle"
+    handle.Size = Vector3.new(1, 1, 1)
+    handle.Anchored = false
+    handle.CanCollide = false
+    handle.Parent = tool
+    
+    tool.Activated:Connect(function()
+        handler(tool)
+    end)
+    
+    return tool
+end
+
+-- Command Definitions
+function ARA:RegisterCommands()
+    -- Fly Command
+    ARA:RegisterCommand("fly", "Enables flight for a player", false, function(args)
+        if #args < 1 then
+            ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "fly [player]", 5)
+            return
+        end
+        
+        local target = ARA:GetPlayer(args, 1)
+        if not target then
+            ARA:ShowNotification("Error", "Player not found", 5)
+            return
+        end
+        
+        local char = target.Character
+        if not char then
+            ARA:ShowNotification("Error", "Target has no character", 5)
+            return
+        end
+        
+        local humanoid = char:FindFirstChild("Humanoid")
+        if not humanoid then
+            ARA:ShowNotification("Error", "Target has no humanoid", 5)
+            return
+        end
+        
+        if not char:FindFirstChild("FlightController") then
+            local flightController = Instance.new("BodyGyro")
+            flightController.Name = "FlightController"
+            flightController.P = 1000
+            flightController.D = 100
+            flightController.MaxTorque = Vector3.new(4000, 4000, 4000)
+            flightController.Parent = char
+            
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.Name = "FlightVelocity"
+            bodyVelocity.Velocity = Vector3.new()
+            bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+            bodyVelocity.Parent = char
+            
+            ARA:ShowNotification("Flight Enabled", target.Name .. " can now fly", 5)
+        else
+            char:FindFirstChild("FlightController"):Destroy()
+            char:FindFirstChild("FlightVelocity"):Destroy()
+            ARA:ShowNotification("Flight Disabled", target.Name .. " can no longer fly", 5)
+        end
+    end)
+    
+    -- Noclip Command
+    ARA:RegisterCommand("noclip", "Toggles noclip for a player", false, function(args)
+        if #args < 1 then
+            ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "noclip [player]", 5)
+            return
+        end
+        
+        local target = ARA:GetPlayer(args, 1)
+        if not target then
+            ARA:ShowNotification("Error", "Player not found", 5)
+            return
+        end
+        
+        local char = target.Character
+        if not char then
+            ARA:ShowNotification("Error", "Target has no character", 5)
+            return
+        end
+        
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Anchored = false
+                part:GetPropertyChangedSignal("Anchored"):Wait()
+                part.Anchored = false
+                part.CanCollide = false
+            end
+        end
+        
+        ARA:ShowNotification("Noclip Toggled", "Noclip toggled for " .. target.Name, 5)
+    end)
+    
+    -- Kill Command
+    ARA:RegisterCommand("kill", "Kills a player", false, function(args)
+        if #args < 1 then
+            ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "kill [player]", 5)
+            return
+        end
+        
+        local target = ARA:GetPlayer(args, 1)
+        if not target then
+            ARA:ShowNotification("Error", "Player not found", 5)
+            return
+        end
+        
+        local char = target.Character
+        if not char then
+            ARA:ShowNotification("Error", "Target has no character", 5)
+            return
+        end
+        
+        local humanoid = char:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.Health = 0
+            ARA:ShowNotification("Killed", target.Name .. " has been killed", 5)
+        end
+    end)
+    
+    -- Respawn Command
+    ARA:RegisterCommand("respawn", "Respawns a player", false, function(args)
+        if #args < 1 then
+            ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "respawn [player]", 5)
+            return
+        end
+        
+        local target = ARA:GetPlayer(args, 1)
+        if not target then
+            ARA:ShowNotification("Error", "Player not found", 5)
+            return
+        end
+        
+        target:LoadCharacter()
+        ARA:ShowNotification("Respawned", target.Name .. " has been respawned", 5)
+    end)
+    
+    -- Reset Command
+    ARA:RegisterCommand("reset", "Resets a player's character", false, function(args)
+        if #args < 1 then
+            ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "reset [player]", 5)
+            return
+        end
+        
+        local target = ARA:GetPlayer(args, 1)
+        if not target then
+            ARA:ShowNotification("Error", "Player not found", 5)
+            return
+        end
+        
+        if target.Character then
+            target.Character:BreakJoints()
+            ARA:ShowNotification("Reset", target.Name .. "'s character has been reset", 5)
+        end
+    end)
+    
+    -- Bring Command
+    ARA:RegisterCommand("bring", "Brings a player to you", false, function(args)
+        if #args < 1 then
+            ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "bring [player]", 5)
+            return
+        end
+        
+        local target = ARA:GetPlayer(args, 1)
+        if not target then
+            ARA:ShowNotification("Error", "Player not found", 5)
+            return
+        end
+        
+        if target.Character and LocalPlayer.Character then
+            target.Character:SetPrimaryPartCFrame(LocalPlayer.Character.PrimaryPart.CFrame * CFrame.new(0, 0, -5))
+            ARA:ShowNotification("Brought", target.Name .. " has been brought to you", 5)
+        end
+    end)
+    
+    -- Goto Command
+    ARA:RegisterCommand("goto", "Teleports you to a player", false, function(args)
+        if #args < 1 then
+            ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "goto [player]", 5)
+            return
+        end
+        
+        local target = ARA:GetPlayer(args, 1)
+        if not target then
+            ARA:ShowNotification("Error", "Player not found", 5)
+            return
+        end
+        
+        if target.Character and LocalPlayer.Character then
+            LocalPlayer.Character:SetPrimaryPartCFrame(target.Character.PrimaryPart.CFrame * CFrame.new(0, 5, 5))
+            ARA:ShowNotification("Teleported", "You have been teleported to " .. target.Name, 5)
+        end
+    end)
+    
+    -- TP Command
+    ARA:RegisterCommand("tp", "Teleports one player to another", false, function(args)
+        if #args < 2 then
+            ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "tp [player1] [player2]", 5)
+            return
+        end
+        
+        local target1 = ARA:GetPlayer(args, 1)
+        local target2 = ARA:GetPlayer(args, 2)
+        
+        if not target1 or not target2 then
+            ARA:ShowNotification("Error", "Players not found", 5)
+            return
+        end
+        
+        if target1.Character and target2.Character then
+            target1.Character:SetPrimaryPartCFrame(target2.Character.PrimaryPart.CFrame * CFrame.new(0, 0, -5))
+            ARA:ShowNotification("Teleported", target1.Name .. " has been teleported to " .. target2.Name, 5)
+        end
+    end)
+    
+    -- Fling Command
+    ARA:RegisterCommand("fling", "Flings a player", false, function(args)
+        if #args < 1 then
+            ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "fling [player]", 5)
+            return
+        end
+        
+        local target = ARA:GetPlayer(args, 1)
+        if not target then
+            ARA:ShowNotification("Error", "Player not found", 5)
+            return
+        end
+        
+        if target.Character then
+            local humanoid = target.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.PlatformStand = true
+                wait(0.1)
+                
+                local bv = Instance.new("BodyVelocity")
+                bv.Velocity = Vector3.new(0, 50, 0)
+                bv.MaxForce = Vector3.new(100000, 100000, 100000)
+                bv.Parent = humanoid.RootPart
+                
+                wait(0.5)
+                bv:Destroy()
+                humanoid.PlatformStand = false
+                ARA:ShowNotification("Fling", target.Name .. " has been flung", 5)
+            end
+        end
+    end)
+    
+
+
+-- Tools Command
+ARA:RegisterCommand("tools", "Gives yourself special admin tools", false, function(args)
+    local toolNames = {
+        "AdminTool",
+        "NoclipTool",
+        "FlyTool",
+        "TeleportTool",
+        "TrollTool"
+    }
+    
+    for _, toolName in ipairs(toolNames) do
+        local tool = ARA:CreateTool(toolName, "Admin Tool", function(tool)
+            ARA.GUI.CommandInput.Text = ARA.Settings.Prefix .. string.lower(toolName)
+            ARA.GUI.CommandInput:CaptureFocus()
+        end)
+        
+        tool.Parent = LocalPlayer.Backpack
+    end
+    
+    ARA:ShowNotification("Tools Created", "Admin tools have been added to your backpack", 5)
+end)
+
+-- Ban Command
+ARA:RegisterCommand("ban", "Bans a player from the game", true, function(args)
+    if #args < 1 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "ban [player]", 5)
+        return
+    end
+    
+    local target = ARA:GetPlayer(args, 1)
+    if not target then
+        ARA:ShowNotification("Error", "Player not found", 5)
+        return
+    end
+    
+    ARA.BannedPlayers[target.UserId] = true
+    target:Kick("You have been banned by an administrator")
+    ARA:ShowNotification("Banned", target.Name .. " has been banned", 5)
+end)
+
+-- Unban Command
+ARA:RegisterCommand("unban", "Unbans a player", true, function(args)
+    if #args < 1 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "unban [player]", 5)
+        return
+    end
+    
+    local userId = tonumber(args[1])
+    if not userId then
+        ARA:ShowNotification("Error", "Invalid user ID", 5)
+        return
+    end
+    
+    ARA.BannedPlayers[userId] = nil
+    ARA:ShowNotification("Unbanned", "User " .. userId .. " has been unbanned", 5)
+end)
+
+-- Kick Command
+ARA:RegisterCommand("kick", "Kicks a player from the game", true, function(args)
+    if #args < 1 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "kick [player]", 5)
+        return
+    end
+    
+    local target = ARA:GetPlayer(args, 1)
+    if not target then
+        ARA:ShowNotification("Error", "Player not found", 5)
+        return
+    end
+    
+    target:Kick("You have been kicked by an administrator")
+    ARA:ShowNotification("Kicked", target.Name .. " has been kicked", 5)
+end)
+
+-- Jail Command
+ARA:RegisterCommand("jail", "Jails a player", false, function(args)
+    if #args < 1 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "jail [player]", 5)
+        return
+    end
+    
+    local target = ARA:GetPlayer(args, 1)
+    if not target then
+        ARA:ShowNotification("Error", "Player not found", 5)
+        return
+    end
+    
+    local char = target.Character
+    if not char then
+        ARA:ShowNotification("Error", "Target has no character", 5)
+        return
+    end
+    
+    -- Create jail cell
+    local jailPosition = LocalPlayer.Character.PrimaryPart.CFrame * CFrame.new(0, 0, 10)
+    local jail = Instance.new("Part")
+    jail.Size = Vector3.new(10, 10, 10)
+    jail.Position = jailPosition.Position
+    jail.Anchored = true
+    jail.Material = Enum.Material.SmoothPlastic
+    jail.BrickColor = BrickColor.new("Institutional white")
+    jail.Parent = Workspace
+    
+    -- Create bars
+    for x = -5, 5, 2 do
+        for y = -5, 5, 2 do
+            if math.abs(x) == 5 or math.abs(y) == 5 then
+                local bar = Instance.new("Part")
+                bar.Size = Vector3.new(1, 10, 1)
+                bar.Position = jail.Position + Vector3.new(x, y, 5)
+                bar.Anchored = true
+                bar.Material = Enum.Material.Metal
+                bar.BrickColor = BrickColor.new("Really black")
+                bar.Parent = Workspace
+            end
+        end
+    end
+    
+    -- Move player to jail
+    char:SetPrimaryPartCFrame(jail.CFrame)
+    
+    -- Disable movement
+    local humanoid = char:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.PlatformStand = true
+        ARA.JailedPlayers[target.UserId] = jail
+        ARA:ShowNotification("Jailed", target.Name .. " has been jailed", 5)
+    end
+end)
+
+-- Unjail Command
+ARA:RegisterCommand("unjail", "Releases a player from jail", false, function(args)
+    if #args < 1 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "unjail [player]", 5)
+        return
+    end
+    
+    local target = ARA:GetPlayer(args, 1)
+    if not target then
+        ARA:ShowNotification("Error", "Player not found", 5)
+        return
+    end
+    
+    if ARA.JailedPlayers[target.UserId] then
+        local jail = ARA.JailedPlayers[target.UserId]
+        jail:Destroy()
+        for _, part in pairs(Workspace:GetChildren()) do
+            if part:IsA("Part") and part.Material == Enum.Material.Metal then
+                if (part.Position - jail.Position).Magnitude < 10 then
+                    part:Destroy()
+                end
+            end
+        end
+        
+        local char = target.Character
+        if char then
+            local humanoid = char:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.PlatformStand = false
+            end
+        end
+        
+        ARA.JailedPlayers[target.UserId] = nil
+        ARA:ShowNotification("Unjail", target.Name .. " has been released from jail", 5)
+    else
+        ARA:ShowNotification("Error", target.Name .. " is not jailed", 5)
+    end
+end)
+
+-- Chat Command
+ARA:RegisterCommand("chat", "Sends a message as another player", false, function(args)
+    if #args < 2 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "chat [player] [message]", 5)
+        return
+    end
+    
+    local target = ARA:GetPlayer(args, 1)
+    local message = table.concat(args, " ", 2)
+    
+    if not target then
+        ARA:ShowNotification("Error", "Player not found", 5)
+        return
+    end
+    
+    -- Simulate chat
+    local chatService = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+    if chatService then
+        local sayEvent = chatService:FindFirstChild("SayMessageRequest")
+        if sayEvent then
+            sayEvent:FireServer(message, "All")
+            ARA:ShowNotification("Chat", "Message sent as " .. target.Name, 5)
+        end
+    end
+end)
+
+-- Msg Command
+ARA:RegisterCommand("msg", "Sends a private message to a player", false, function(args)
+    if #args < 2 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "msg [player] [message]", 5)
+        return
+    end
+    
+    local target = ARA:GetPlayer(args, 1)
+    local message = table.concat(args, " ", 2)
+    
+    if not target then
+        ARA:ShowNotification("Error", "Player not found", 5)
+        return
+    end
+    
+    ARA:ShowNotification("Private Message", "Sent to " .. target.Name .. ": " .. message, 5)
+    ARA:ShowNotification("From " .. LocalPlayer.Name, message, 10, target)
+end)
+
+-- Whisper Command
+ARA:RegisterCommand("whisper", "Whispers a message to nearby players", false, function(args)
+    if #args < 1 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "whisper [message]", 5)
+        return
+    end
+    
+    local message = table.concat(args, " ", 1)
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and (player.Character and LocalPlayer.Character) then
+            local distance = (player.Character.PrimaryPart.Position - LocalPlayer.Character.PrimaryPart.Position).Magnitude
+            if distance < 20 then
+                ARA:ShowNotification("Whisper", LocalPlayer.Name .. " whispers: " .. message, 5, player)
+            end
+        end
+    end
+    
+    ARA:ShowNotification("Whisper", "Message whispered to nearby players", 5)
+end)
+
+-- Announce Command
+ARA:RegisterCommand("announce", "Sends a global announcement", false, function(args)
+    if #args < 1 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "announce [message]", 5)
+        return
+    end
+    
+    local message = table.concat(args, " ", 1)
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        ARA:ShowNotification("Announcement", message, 10, player)
+    end
+    
+    ARA:ShowNotification("Announcement", "Message announced to all players", 5)
+end)
+
+-- SetTime Command
+ARA:RegisterCommand("settime", "Sets the time of day", false, function(args)
+    if #args < 1 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "settime [hour]", 5)
+        return
+    end
+    
+    local hour = tonumber(args[1])
+    if not hour or hour < 0 or hour > 24 then
+        ARA:ShowNotification("Error", "Invalid hour (0-24)", 5)
+        return
+    end
+    
+    Lighting.ClockTime = hour
+    ARA.EnvironmentBackup.Time = hour
+    ARA:ShowNotification("Time Set", "Time set to " .. hour .. ":00", 5)
+end)
+
+-- SetGravity Command
+ARA:RegisterCommand("setgravity", "Sets the gravity of the game", false, function(args)
+    if #args < 1 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "setgravity [value]", 5)
+        return
+    end
+    
+    local value = tonumber(args[1])
+    if not value then
+        ARA:ShowNotification("Error", "Invalid gravity value", 5)
+        return
+    end
+    
+    Workspace.Gravity = value
+    ARA.EnvironmentBackup.Gravity = value
+    ARA:ShowNotification("Gravity Set", "Gravity set to " .. value, 5)
+end)
+
+-- Fog Command
+ARA:RegisterCommand("fog", "Controls fog settings", false, function(args)
+    if #args < 1 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "fog [on/off/density]", 5)
+        return
+    end
+    
+    local arg = args[1]:lower()
+    if arg == "on" then
+        Lighting.FogStart = 0
+        Lighting.FogEnd = 1000
+        ARA.EnvironmentBackup.FogStart = 0
+        ARA.EnvironmentBackup.FogEnd = 1000
+        ARA:ShowNotification("Fog Enabled", "Fog has been turned on", 5)
+    elseif arg == "off" then
+        Lighting.FogStart = 10000
+        Lighting.FogEnd = 100000
+        ARA.EnvironmentBackup.FogStart = 10000
+        ARA.EnvironmentBackup.FogEnd = 100000
+        ARA:ShowNotification("Fog Disabled", "Fog has been turned off", 5)
+    else
+        local density = tonumber(args[1])
+        if not density or density < 0 or density > 1 then
+            ARA:ShowNotification("Error", "Invalid fog density (0-1)", 5)
+            return
+        end
+        
+        Lighting.FogStart = 0
+        Lighting.FogEnd = density * 1000
+        ARA.EnvironmentBackup.FogStart = 0
+        ARA.EnvironmentBackup.FogEnd = density * 1000
+        ARA:ShowNotification("Fog Density", "Fog density set to " .. density, 5)
+    end
+end)
+
+-- Rain Command
+ARA:RegisterCommand("rain", "Toggles rain", false, function(args)
+    local weather = Workspace:FindFirstChild("Weather")
+    if not weather then
+        weather = Instance.new("Folder")
+        weather.Name = "Weather"
+        weather.Parent = Workspace
+    end
+    
+    if not weather:FindFirstChild("Rain") then
+        local rain = Instance.new("ParticleEmitter")
+        rain.Name = "Rain"
+        rain.Texture = "rbxassetid://13749784"
+        rain.Color = ColorSequence.new(Color3.fromRGB(170, 170, 170))
+        rain.Lifetime = NumberRange.new(1, 2)
+        rain.Rate = 1000
+        rain.VelocitySpread = 10
+        rain.Speed = NumberRange.new(50, 100)
+        rain.Direction = Vector3.new(0, -1, 0)
+        rain.Parent = weather
+        
+        ARA.EnvironmentBackup.Rain = true
+        ARA:ShowNotification("Rain Enabled", "Rain effect activated", 5)
+    else
+        weather.Rain:Destroy()
+        ARA.EnvironmentBackup.Rain = false
+        ARA:ShowNotification("Rain Disabled", "Rain effect deactivated", 5)
+    end
+end)
+
+-- Thunder Command
+ARA:RegisterCommand("thunder", "Creates a thunder effect", false, function(args)
+    local lightning = Instance.new("Explosion")
+    lightning.BlastRadius = 10
+    lightning.BlastPressure = 0
+    lightning.Position = Workspace.CurrentCamera.CFrame.Position + Vector3.new(0, 50, 0)
+    lightning.Hit:Connect(function(part, position)
+        local flash = Instance.new("Part")
+        flash.Shape = Enum.PartType.Block
+        flash.Size = Vector3.new(100, 100, 1)
+        flash.Position = position + Vector3.new(0, 0, 0.5)
+        flash.Anchored = true
+        flash.CanCollide = false
+        flash.Material = Enum.Material.Neon
+        flash.BrickColor = BrickColor.new("White")
+        flash.Transparency = 0.5
+        flash.Parent = Workspace
+        
+        local light = Instance.new("PointLight")
+        light.Brightness = 2
+        light.Range = 50
+        light.Color = Color3.fromRGB(255, 255, 255)
+        light.Parent = flash
+        
+        game.Debris:AddItem(flash, 0.2)
+    end)
+    
+    lightning.Parent = Workspace
+    ARA:ShowNotification("Thunder", "Thunder effect created", 5)
+end)
+
+-- Custom Tool Builder
+ARA:RegisterCommand("toolbuilder", "Opens the custom tool builder", false, function(args)
+    local toolBuilderGUI = Instance.new("ScreenGui")
+    toolBuilderGUI.Name = "ToolBuilder"
+    toolBuilderGUI.ResetOnSpawn = false
+    toolBuilderGUI.Parent = CoreGui
+    
+    local window = Instance.new("Frame")
+    window.Name = "Window"
+    window.Size = UDim2.new(0, 400, 0, 300)
+    window.Position = UDim2.new(0.5, -200, 0.5, -150)
+    window.BackgroundColor3 = ARA.Settings.ThemeColor
+    window.BorderSizePixel = 0
+    window.Parent = toolBuilderGUI
+    
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.Position = UDim2.new(0, 0, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "Custom Tool Builder"
+    title.TextColor3 = ARA.Settings.TextColor
+    title.TextSize = 20
+    title.Font = Enum.Font.GothamBold
+    title.Parent = window
+    
+    local nameBox = Instance.new("TextBox")
+    nameBox.Name = "NameBox"
+    nameBox.Size = UDim2.new(0.8, 0, 0, 30)
+    nameBox.Position = UDim2.new(0.1, 0, 0, 50)
+    nameBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    nameBox.BorderSizePixel = 0
+    nameBox.TextColor3 = ARA.Settings.TextColor
+    nameBox.PlaceholderText = "Tool Name"
+    nameBox.Text = ""
+    nameBox.Font = Enum.Font.Gotham
+    nameBox.TextSize = 14
+    nameBox.Parent = window
+    
+    local descriptionBox = Instance.new("TextBox")
+    descriptionBox.Name = "DescriptionBox"
+    descriptionBox.Size = UDim2.new(0.8, 0, 0, 60)
+    descriptionBox.Position = UDim2.new(0.1, 0, 0, 90)
+    descriptionBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    descriptionBox.BorderSizePixel = 0
+    descriptionBox.TextColor3 = ARA.Settings.TextColor
+    descriptionBox.PlaceholderText = "Tool Description"
+    descriptionBox.Text = ""
+    descriptionBox.Font = Enum.Font.Gotham
+    descriptionBox.TextSize = 14
+    descriptionBox.MultiLine = true
+    descriptionBox.Parent = window
+    
+    local createButton = Instance.new("TextButton")
+    createButton.Name = "CreateButton"
+    createButton.Size = UDim2.new(0.8, 0, 0, 40)
+    createButton.Position = UDim2.new(0.1, 0, 0, 160)
+    createButton.BackgroundColor3 = ARA.Settings.AccentColor
+    createButton.BorderSizePixel = 0
+    createButton.Text = "Create Tool"
+    createButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    createButton.Font = Enum.Font.GothamBold
+    createButton.TextSize = 16
+    createButton.Parent = window
+    
+    local closeButton = Instance.new("TextButton")
+    closeButton.Name = "CloseButton"
+    closeButton.Size = UDim2.new(0.2, 0, 0, 30)
+    closeButton.Position = UDim2.new(0.8, 0, 0, 0)
+    closeButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    closeButton.BorderSizePixel = 0
+    closeButton.Text = "X"
+    closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.TextSize = 16
+    closeButton.Parent = window
+    
+    -- GUI Elements
+    ARA.GUI.ToolBuilder = toolBuilderGUI
+    ARA.GUI.ToolBuilderWindow = window
+    ARA.GUI.ToolNameBox = nameBox
+    ARA.GUI.ToolDescriptionBox = descriptionBox
+    ARA.GUI.ToolCreateButton = createButton
+    
+    -- Drag functionality
+    MakeDraggable(window)
+    
+    -- Button handlers
+    createButton.MouseButton1Click:Connect(function()
+        local name = nameBox.Text
+        local description = descriptionBox.Text
+        
+        if name == "" then
+            ARA:ShowNotification("Error", "Tool name cannot be empty", 5)
+            return
+        end
+        
+        local tool = ARA:CreateTool(name, description, function(tool)
+            ARA:ShowNotification("Tool Activated", name .. " tool activated", 5)
+        end)
+        
+        tool.Parent = LocalPlayer.Backpack
+        ARA:ShowNotification("Tool Created", name .. " tool created successfully", 5)
+        toolBuilderGUI:Destroy()
+    end)
+    
+    closeButton.MouseButton1Click:Connect(function()
+        toolBuilderGUI:Destroy()
+    end)
+    
+    ARA:ShowNotification("Tool Builder", "Custom tool builder opened", 5)
+end)
+
+-- Troll Commands
+ARA:RegisterCommand("spin", "Spins a player uncontrollably", false, function(args)
+    if #args < 1 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "spin [player]", 5)
+        return
+    end
+    
+    local target = ARA:GetPlayer(args, 1)
+    if not target then
+        ARA:ShowNotification("Error", "Player not found", 5)
+        return
+    end
+    
+    if ARA.ActiveTrolls[target.UserId] and ARA.ActiveTrolls[target.UserId].spin then
+        ARA.ActiveTrolls[target.UserId].spin = nil
+        ARA:ShowNotification("Spin Stopped", target.Name .. " is no longer spinning", 5)
+        return
+    end
+    
+    if not ARA.ActiveTrolls[target.UserId] then
+        ARA.ActiveTrolls[target.UserId] = {}
+    end
+    
+    ARA.ActiveTrolls[target.UserId].spin = true
+    
+    spawn(function()
+        while ARA.ActiveTrolls[target.UserId] and ARA.ActiveTrolls[target.UserId].spin do
+            if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                target.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad(10), 0)
+            end
+            wait(0.1)
+        end
+    end)
+    
+    ARA:ShowNotification("Spinning", "Spinning " .. target.Name .. " uncontrollably", 5)
+end)
+
+ARA:RegisterCommand("disco", "Disco lights on a player", false, function(args)
+    if #args < 1 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "disco [player]", 5)
+        return
+    end
+    
+    local target = ARA:GetPlayer(args, 1)
+    if not target then
+        ARA:ShowNotification("Error", "Player not found", 5)
+        return
+    end
+    
+    if ARA.ActiveTrolls[target.UserId] and ARA.ActiveTrolls[target.UserId].disco then
+        ARA.ActiveTrolls[target.UserId].disco = nil
+        ARA:ShowNotification("Disco Stopped", target.Name .. " is no longer disco dancing", 5)
+        return
+    end
+    
+    if not ARA.ActiveTrolls[target.UserId] then
+        ARA.ActiveTrolls[target.UserId] = {}
+    end
+    
+    ARA.ActiveTrolls[target.UserId].disco = true
+    
+    spawn(function()
+        while ARA.ActiveTrolls[target.UserId] and ARA.ActiveTrolls[target.UserId].disco do
+            if target.Character then
+                for _, part in pairs(target.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.BrickColor = BrickColor.random()
+                    end
+                end
+            end
+            wait(0.2)
+        end
+    end)
+    
+    ARA:ShowNotification("Disco Time", "Making " .. target.Name .. " a disco ball", 5)
+end)
+
+ARA:RegisterCommand("glitch", "Glitch effect on a player", false, function(args)
+    if #args < 1 then
+        ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "glitch [player]", 5)
+        return
+    end
+    
+    local target = ARA:GetPlayer(args, 1)
+    if not target then
+        ARA:ShowNotification("Error", "Player not found", 5)
+        return
+    end
+    
+    if ARA.ActiveTrolls[target.UserId] and ARA.ActiveTrolls[target.UserId].glitch then
+        ARA.ActiveTrolls[target.UserId].glitch = nil
+        ARA:ShowNotification("Glitch Stopped", target.Name .. " is no longer glitching", 5)
+        return
+    end
+    
+    if not ARA.ActiveTrolls[target.UserId] then
+        ARA.ActiveTrolls[target.UserId] = {}
+    end
+    
+    ARA.ActiveTrolls[target.UserId].glitch = true
+    
+    spawn(function()
+        while ARA.ActiveTrolls[target.UserId] and ARA.ActiveTrolls[target.UserId].glitch do
+            if target.Character then
+                for _, part in pairs(target.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.Transparency = math.random() * 0.5
+                        part.Reflectance = math.random() * 0.5
+                        part.Size = part.Size * (0.5 + math.random())
+                    end
+                end
+            end
+            wait(0.1)
+        end
+    end)
+    
+    ARA:ShowNotification("Glitch Effect", "Applying glitch effect to " .. target.Name, 5)
+end)
+
+-- Save System
+ARA:RegisterCommand("save", "Saves current settings and commands", false, function(args)
+    local saveData = {
+        Settings = ARA.Settings,
+        SavedCommands = ARA.SavedData,
+        Version = ARA.Settings.SaveVersion
+    }
+    
+    local encodedData = HttpService:JSONEncode(saveData)
+    
+    -- In a real implementation, you'd save this to a file or data store
+    -- For this example, we'll just store it in memory
+    ARA.SavedData = encodedData
+    
+    ARA:ShowNotification("Saved", "Settings and commands saved successfully", 5)
+end)
+
+ARA:RegisterCommand("load", "Loads saved settings and commands", false, function(args)
+    if not ARA.SavedData then
+        ARA:ShowNotification("Error", "No saved data found", 5)
+        return
+    end
+    
+    local decodedData = HttpService:JSONDecode(ARA.SavedData)
+    
+    if decodedData.Version == ARA.Settings.SaveVersion then
+        ARA.Settings = decodedData.Settings
+        ARA.SavedData = decodedData.SavedCommands
+        ARA:ShowNotification("Loaded", "Settings and commands loaded successfully", 5)
+    else
+        ARA:ShowNotification("Error", "Saved data version mismatch", 5)
+    end
+end)
+
+-- Game-Specific Support
+function ARA:CheckGameSupport()
+    local placeId = game.PlaceId
+    
+    -- Blox Fruits
+    if placeId == 2753915549 then
+        ARA:RegisterCommand("setfruit", "Sets a player's devil fruit", false, function(args)
+            if #args < 2 then
+                ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "setfruit [player] [fruit]", 5)
+                return
+            end
+            
+            local target = ARA:GetPlayer(args, 1)
+            local fruit = args[2]
+            
+            if not target then
+                ARA:ShowNotification("Error", "Player not found", 5)
+                return
+            end
+            
+            -- This would interact with Blox Fruits specific systems
+            ARA:ShowNotification("Fruit Set", "Set " .. target.Name .. "'s fruit to " .. fruit, 5)
+        end)
+    end
+    
+    -- Blade Ball
+    if placeId == 4628334955 then
+        ARA:RegisterCommand("giveblade", "Gives a blade to a player", false, function(args)
+            if #args < 1 then
+                ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "giveblade [player]", 5)
+                return
+            end
+            
+            local target = ARA:GetPlayer(args, 1)
+            if not target then
+                ARA:ShowNotification("Error", "Player not found", 5)
+                return
+            end
+            
+            -- This would interact with Blade Ball specific systems
+            ARA:ShowNotification("Blade Given", "Gave " .. target.Name .. " a blade", 5)
+        end)
+    end
+    
+    -- Da Hood
+    if placeId == 2162278919 then
+        ARA:RegisterCommand("givegun", "Gives a gun to a player", false, function(args)
+            if #args < 2 then
+                ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "givegun [player] [gun]", 5)
+                return
+            end
+            
+            local target = ARA:GetPlayer(args, 1)
+            local gun = args[2]
+            
+            if not target then
+                ARA:ShowNotification("Error", "Player not found", 5)
+                return
+            end
+            
+            -- This would interact with Da Hood specific systems
+            ARA:ShowNotification("Gun Given", "Gave " .. target.Name .. " a " .. gun, 5)
+        end)
+    end
+    
+    -- Brookhaven
+    if placeId == 6284583030 then
+        ARA:RegisterCommand("setcar", "Sets a player's car", false, function(args)
+            if #args < 2 then
+                ARA:ShowNotification("Usage", ARA.Settings.Prefix .. "setcar [player] [car]", 5)
+                return
+            end
+            
+            local target = ARA:GetPlayer(args, 1)
+            local car = args[2]
+            
+            if not target then
+                ARA:ShowNotification("Error", "Player not found", 5)
+                return
+            end
+            
+            -- This would interact with Brookhaven specific systems
+            ARA:ShowNotification("Car Set", "Set " .. target.Name .. "'s car to " .. car, 5)
+        end)
+    end
+    
+    ARA:ShowNotification("Game Support", "Loaded game-specific commands", 5)
+end
+
+-- Update System
+ARA:RegisterCommand("update", "Checks for updates", true, function(args)
+    ARA:ShowNotification("Update", "Checking for updates...", 5)
+    
+    spawn(function()
+        local success, response = pcall(function()
+            return HttpService:JSONDecode(game:HttpGet("https://raw.githubusercontent.com/yourname/ARA/main/version.json"))
+        end)
+        
+        if success and response and response.version then
+            local latestVersion = response.version
+            if latestVersion > ARA.Version then
+                ARA:ShowNotification("Update Available", "New version " .. latestVersion .. " is available", 5)
+                ARA:ShowNotification("Update Instructions", "Run " .. ARA.Settings.Prefix .. "downloadupdate to download the update", 5)
+            else
+                ARA:ShowNotification("Up to Date", "You are using the latest version", 5)
+            end
+        else
+            ARA:ShowNotification("Update Error", "Failed to check for updates", 5)
+        end
+    end)
+end)
+
+ARA:RegisterCommand("downloadupdate", "Downloads and applies an update", true, function(args)
+    ARA:ShowNotification("Update", "Downloading update...", 5)
+    
+    spawn(function()
+        local success, response = pcall(function()
+            return game:HttpGet("https://raw.githubusercontent.com/yourname/ARA/main/ARA.lua")
+        end)
+        
+        if success and response and #response > 0 then
+            ARA:ShowNotification("Update", "Update downloaded successfully", 5)
+            ARA:ShowNotification("Restart", "Please restart the script to apply the update", 5)
+            
+            -- Save the update to apply it later
+            ARA.PendingUpdate = response
+        else
+            ARA:ShowNotification("Update Error", "Failed to download update", 5)
+        end
+    end)
+end)
+
+-- Initialize the admin script
+function ARA:Initialize()
+    ARA:CreateGUI()
+    ARA:RegisterCommands()
+    ARA:CheckGameSupport()
+    
+    -- Handle pending update if any
+    if ARA.PendingUpdate then
+        loadstring(ARA.PendingUpdate)()
+        ARA:ShowNotification("Update Applied", "New version has been loaded", 5)
+        ARA.PendingUpdate = nil
+    end
+    
+    ARA:ShowNotification("ARA Admin", "Admin script initialized successfully", 10)
+end
+
+-- Start the admin script
+ARA:Initialize()
