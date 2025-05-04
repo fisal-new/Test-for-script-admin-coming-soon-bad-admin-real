@@ -911,10 +911,7 @@ function ARA:RegisterCommands()
                 ARA:ShowNotification("Fling", target.Name .. " has been flung", 5)
             end
         end
-    end)
-    
-
-
+    end
 -- Tools Command
 ARA:RegisterCommand("tools", "Gives yourself special admin tools", false, function(args)
     local toolNames = {
